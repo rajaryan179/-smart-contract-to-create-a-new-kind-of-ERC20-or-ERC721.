@@ -1,0 +1,95 @@
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+
+contract TokenCombiner {
+    struct Combination {
+        address[] inputTokens;
+        address outputToken;
+        uint256[] inputTokenAmounts;
+        uint256 outputTokenAmount;
+    }
+
+    mapping(uint256 => Combination) public combinations;
+    uint256 public combinationCount;
+
+    event TokensCombined(
+        address indexed sender,
+        address[] indexed inputTokens,
+        address indexed outputToken,
+        uint256[] inputTokenAmounts,
+        uint256 outputTokenAmount
+    );
+
+    function addCombination(
+        address[] memory _inputTokens,
+        address _outputToken,
+        uint256[] memory _inputTokenAmounts,
+        uint256 _outputTokenAmount
+    ) external {
+        require(_inputTokens.length > 0, "No input tokens provided.");
+        require(
+            _inputTokens.length == _inputTokenAmounts.length,
+            "Input token and amount lengths mismatch."
+        );
+
+        combinationCount++;
+        combinations[combinationCount] = Combination(
+            _inputTokens,
+            _outputToken,
+            _inputTokenAmounts,
+            _outputTokenAmount
+        );
+    }
+
+    function combineTokens(uint256 _combinationId) external {
+        Combination storage combination = combinations[_combinationId];
+        require(
+            combination.inputTokens.length > 0,
+            "Combination does not exist for the given ID."
+        );
+        require(
+            combination.inputTokens.length == combination.inputTokenAmounts.length,
+            "Invalid combination configuration."
+        );
+
+        // Check if the user has the required amount of input tokens
+        for (uint256 i = 0; i < combination.inputTokens.length; i++) {
+            address inputToken = combination.inputTokens[i];
+            uint256 requiredAmount = combination.inputTokenAmounts[i];
+            require(
+                IERC20(inputToken).balanceOf(msg.sender) >= requiredAmount,
+                "Insufficient tokens for combination."
+            );
+        }
+
+        // Burn the input tokens
+        for (uint256 i = 0; i < combination.inputTokens.length; i++) {
+            address inputToken = combination.inputTokens[i];
+            uint256 requiredAmount = combination.inputTokenAmounts[i];
+            IERC20(inputToken).transferFrom(msg.sender, address(this), requiredAmount);
+        }
+
+        // Mint the output token
+        if (isERC721(combination.outputToken)) {
+            ERC721(combination.outputToken).safeMint(msg.sender);
+        } else {
+            IERC20(combination.outputToken).transfer(msg.sender, combination.outputTokenAmount);
+        }
+
+        // Emit the combination event
+        emit TokensCombined(
+            msg.sender,
+            combination.inputTokens,
+            combination.outputToken,
+            combination.inputTokenAmounts,
+            combination.outputTokenAmount
+        );
+    }
+
+    function isERC721(address _token) internal view returns (bool) {
+        return IERC165(_token).supportsInterface(type(IERC721).interfaceId);
+    }
+}
