@@ -72,13 +72,7 @@ contract TokenCombiner {
             IERC20(inputToken).transferFrom(msg.sender, address(this), requiredAmount);
         }
 
-        // Mint the output token
-        if (isERC721(combination.outputToken)) {
-            ERC721(combination.outputToken).safeMint(msg.sender);
-        } else {
-            IERC20(combination.outputToken).transfer(msg.sender, combination.outputTokenAmount);
-        }
-
+        
         // Emit the combination event
         emit TokensCombined(
             msg.sender,
